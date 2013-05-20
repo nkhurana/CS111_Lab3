@@ -1390,7 +1390,7 @@ create_blank_direntry(ospfs_inode_t *dir_oi)
 //
 //   Inputs: src_dentry   -- a pointer to the dentry for the source file.  This
 //                           file's inode contains the real data for the hard
-//                           linked filae.  The important elements are:
+//                           linked file.  The important elements are:
 //                             src_dentry->d_name.name
 //                             src_dentry->d_name.len
 //                             src_dentry->d_inode->i_ino
@@ -1414,10 +1414,42 @@ create_blank_direntry(ospfs_inode_t *dir_oi)
 //   EXERCISE: Complete this function.
 
 static int
-ospfs_link(struct dentry *src_dentry, struct inode *dir, struct dentry *dst_dentry) {
-	/* EXERCISE: Your code here. */
-	return -EINVAL;
+ospfs_link(struct dentry *src_dentry, struct inode *dir, struct dentry *dst_dentry) 
+{
+    
+    ospfs_inode_t *dir_oi = ospfs_inode(dir->i_ino);
+    
+    //check if file named the same as "dentry" already exists
+    if (find_direntry(dir_oi, dst_dentry->d_name.name, dst_dentry->d_name.len) != NULL)
+        return -EEXIST;
+    
+    //check if file name length is too long
+    if (dst_dentry->d_name.len > OSPFS_MAXNAMELEN)
+        return -ENAMETOOLONG;
+    
+    ospfs_direntry_t* directoryEntryForHardLink = create_blank_direntry(dir_oi);
+    if (ISERR(directoryEntryForHardLink))
+        return PTR_ERR(directoryEntryForHardLink);
+    
+    //initialize Hard Link directory entry
+    
+    //copy name into directory entry
+    memcpy(directoryEntryForHardLink->od_name, dst_dentry->d_name.name, dst_dentry->d_name.len);
+    directoryEntryForHardLink->od_name[dentry->d_name.len]= '\0';
+    //set inode number
+    directoryEntryForHardLink->od_ino = src_dentry->d_inode->i_ino;
+    
+    return 0;
 }
+
+
+
+
+
+
+
+
+
 
 // ospfs_create
 //   Linux calls this function to create a regular file.
@@ -1452,21 +1484,61 @@ static int
 ospfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nd)
 {
 	ospfs_inode_t *dir_oi = ospfs_inode(dir->i_ino);
-	uint32_t entry_ino = 0;
-	/* EXERCISE: Your code here. */
-	return -EINVAL; // Replace this line
+    
+    //check if file named the same as "dentry" already exists
+    if (find_direntry(dir_oi, dentry->d_name.name, dentry->d_name.len) != NULL)
+        return -EEXIST;
+    
+    //check if file name length is too long
+    if (dentry->d_name.len > OSPFS_MAXNAMELEN)
+        return -ENAMETOOLONG;
+    ospfs_direntry_t* directoryEntryForRegFile = create_blank_direntry(dir_oi);
+    if (ISERR(directoryEntryForRegFile))
+        return PTR_ERR(directoryEntryForRegFile);
+    
+    //find empty inode
+    uint32_t entry_ino = 0;
+    ospfs_inode_t* emptyInode;
+    while (true)
+    {
+        emptyInode=ospfs_inode(entry_ino);
+        if (emptyInode == NULL) //no more inodes since function returns 0 if ran out of inodes
+            return -ENOSPC;
+        if (emptyInode->oi_nlink == 0)
+        {
+            emptyInode->oi_nlink++;
+            emptyInode->oi_mode=mode;
+            emptyInode->oi_ftype=OSPFS_REG;
+            break;
+        }
+        entry_ino++;
+    }
+    
+    //initialize directory entry
+    
+    //copy name into directory entry
+    memcpy(directoryEntryForRegFile->od_name, dentry->d_name.name, dentry->d_name.len);
+    directoryEntryForRegFile->od_name[dentry->d_name.len]= '\0';
+    //set inodes number
+    directoryEntryForRegFile->od_ino = entry_ino;
+    
+
+    
 
 	/* Execute this code after your function has successfully created the
 	   file.  Set entry_ino to the created file's inode number before
 	   getting here. */
-	{
-		struct inode *i = ospfs_mk_linux_inode(dir->i_sb, entry_ino);
-		if (!i)
-			return -ENOMEM;
-		d_instantiate(dentry, i);
-		return 0;
-	}
+    struct inode *i = ospfs_mk_linux_inode(dir->i_sb, entry_ino);
+    if (!i)
+        return -ENOMEM;
+    d_instantiate(dentry, i);
+    return 0;
+    
 }
+
+
+
+
 
 
 // ospfs_symlink(dirino, dentry, symname)
@@ -1511,6 +1583,16 @@ ospfs_symlink(struct inode *dir, struct dentry *dentry, const char *symname)
 		return 0;
 	}
 }
+
+
+
+
+
+
+
+
+
+
 
 
 // ospfs_follow_link(dentry, nd)
