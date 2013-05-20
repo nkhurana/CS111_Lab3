@@ -1279,7 +1279,7 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 		else
 			n = amountFree;
 			
-		if (copy_from_user(buffer, data + write_offset, n) != 0
+		if (copy_from_user(buffer, data + write_offset, n) != 0)
 		{
 			retval = -EFAULT;
 			goto done;
@@ -1515,7 +1515,7 @@ ospfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidat
     //find empty inode
     uint32_t entry_ino = 0;
     ospfs_inode_t* emptyInode;
-    while (true)
+    while (1)
     {
         emptyInode=ospfs_inode(entry_ino);
         if (emptyInode == NULL) //no more inodes since function returns 0 if ran out of inodes
