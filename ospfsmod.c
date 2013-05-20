@@ -1077,7 +1077,7 @@ change_size(ospfs_inode_t *oi, uint32_t new_size)
             return -EIO;
 	}
 	
-    if (old_size > newsize)
+    if (old_size > new_size)
     {
         while (ospfs_size2nblocks(oi->oi_size) > ospfs_size2nblocks(new_size)) 
         {
@@ -1161,15 +1161,13 @@ ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
         count = oi->oi_size;
     
     
-    
+    char *data;
 	/* EXERCISE: Your code here */
 
 	// Copy the data to user block by block
 	while (amountRead < count && retval >= 0) 
     {
 		uint32_t blockno = ospfs_inode_blockno(oi, *f_pos); //returns block number of where data resides
-		uint32_t n;
-		char *data;
 
 		// ospfs_inode_blockno returns 0 on error
 		if (blockno == 0) 
@@ -1188,13 +1186,14 @@ ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 		
         //unsigned long copy_to_user (void __user * to, const void * from, unsigned long n);
         
-        uint32_t file_pos_offset = *fpos % OSPFS_BLKSIZE;
+        uint32_t file_pos_offset = *f_pos % OSPFS_BLKSIZE;
         
         //check if copying from last block; don't want to read whole 1024 bytes of block!
-        if (count - amountRead) < OSPFS_BLKSIZE)
-            uint32_t DataToRead_inBlock = count-amountRead;
+        uint32_t DataToRead_inBlock;
+        if ((count - amountRead) < OSPFS_BLKSIZE)
+            DataToRead_inBlock = count-amountRead;
         else
-            uint32_t DataToRead_inBlock = OSPFS_BLKSIZE - file_pos_offset;
+            DataToRead_inBlock = OSPFS_BLKSIZE - file_pos_offset;
         
         
         if (copy_to_user(buffer, data + file_pos_offset, DataToRead_inBlock) != 0)
@@ -1210,7 +1209,7 @@ ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 	}
 
     done:
-	return (retval >= 0 ? amount : retval);
+	return (retval >= 0 ? amountRead : retval);
 }
 
 
@@ -1254,7 +1253,8 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 		change_size(oi, count);		
 
 	// Copy data block by block
-	while (amount < count && retval >= 0) {
+	while (amount < count && retval >= 0) 
+    {
 		uint32_t blockno = ospfs_inode_blockno(oi, *f_pos);
 		uint32_t n;
 		char *data;
@@ -1451,7 +1451,7 @@ ospfs_link(struct dentry *src_dentry, struct inode *dir, struct dentry *dst_dent
     
     //copy name into directory entry
     memcpy(directoryEntryForHardLink->od_name, dst_dentry->d_name.name, dst_dentry->d_name.len);
-    directoryEntryForHardLink->od_name[dentry->d_name.len]= '\0';
+    directoryEntryForHardLink->od_name[dst_dentry->d_name.len]= '\0';
     //set inode number
     directoryEntryForHardLink->od_ino = src_dentry->d_inode->i_ino;
     
@@ -1524,7 +1524,7 @@ ospfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidat
         {
             emptyInode->oi_nlink++;
             emptyInode->oi_mode=mode;
-            emptyInode->oi_ftype=OSPFS_REG;
+            emptyInode->oi_ftype=OSPFS_FTYPE_REG;
             break;
         }
         entry_ino++;
@@ -1583,7 +1583,6 @@ static int
 ospfs_symlink(struct inode *dir, struct dentry *dentry, const char *symname)
 {
 	ospfs_inode_t *dir_oi = ospfs_inode(dir->i_ino);
-	uint32_t entry_ino = 0;
 
     //check if file named the same as "dentry" already exists
     if (find_direntry(dir_oi, dentry->d_name.name, dentry->d_name.len) != NULL)
@@ -1600,7 +1599,7 @@ ospfs_symlink(struct inode *dir, struct dentry *dentry, const char *symname)
     //find empty inode
     uint32_t entry_ino = 0;
     ospfs_symlink_inode_t* emptyInode;
-    while (true)
+    while (1)
     {
         emptyInode=ospfs_inode(entry_ino);
         if (emptyInode == NULL) //no more inodes since function returns 0 if ran out of inodes
@@ -1683,8 +1682,8 @@ ospfs_follow_link(struct dentry *dentry, struct nameidata *nd)
         {
 
             char symLink[OSPFS_MAXSYMLINKLEN+1];
-            strncpy(symLink, oi->oi_symlink+5, count);
-            symLink[count] = '\0';
+            strncpy(symLink, oi->oi_symlink+5, count_to_colon);
+            symLink[count_to_colon] = '\0';
             nd_set_link(nd, symLink);
             return (void *) 0;
             
