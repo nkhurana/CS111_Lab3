@@ -1249,9 +1249,8 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 	/* EXERCISE: Your code here */
 	if (write_pos != 0)
 		change_size(oi, oi->oi_size + count);
-	else if (count > oi->oi_size)
-		change_size(oi, count);
-		
+	else if (count != oi->oi_size)
+		change_size(oi, count);		
 
 	// Copy data block by block
 	while (amount < count && retval >= 0) {
@@ -1271,8 +1270,19 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 		// read user space.
 		// Keep track of the number of bytes moved in 'n'.
 		/* EXERCISE: Your code here */
-		retval = -EIO; // Replace these lines
-		goto done;
+		uint32_t write_offset = *write_pos % OSPFS_BLKSIZE;
+		uint32_t amountFree = OSPFS_BLK_SIZE - write_offset;
+		
+		if ((count - amount) < amountFree)
+			n = count - amount;
+		else
+			n = amountFree;
+			
+		if (copy_from_user(buffer, data + write_offset, n) != 0
+		{
+			retval = -EFAULT;
+			goto done;
+		}
 
 		buffer += n;
 		amount += n;
