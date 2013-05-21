@@ -498,7 +498,7 @@ static int ospfs_dir_readdir(struct file *filp, void *dirent, filldir_t filldir)
 			else if (entry_oi->oi_ftype == OSPFS_FTYPE_SYMLINK)
 				ftype = DT_LNK;
 			
-			ok_so_far = filldir(dirent, od->od_name, strlen(od->od_name), f_pos, od->od_ino, ftype);
+			ok_so_far = filldir(dirent, od->od_name, strlen(od->od_name), real_pos, od->od_ino, ftype);
 			if (ok_so_far >= 0)
 				f_pos += OSPFS_DIRENTRY_SIZE;
 			else
@@ -679,9 +679,9 @@ static int32_t indir_index(uint32_t b)
         return -1;
     if (b < (OSPFS_NDIRECT+OSPFS_NINDIRECT)) //indirect block
         return 0;
-        
+    
      //return offset of relevant indrect block w/in doubly indirect block   (between 0 and 255)
-    return ((b-OSPFS_NDIRECT+OSPFS_NINDIRECT)/OSPFS_NINDIRECT);
+    return ((b-(uint32_t)(OSPFS_NDIRECT+OSPFS_NINDIRECT))/OSPFS_NINDIRECT);
                 
 }
 
@@ -704,7 +704,7 @@ static int32_t direct_index(uint32_t b)
         return b-OSPFS_NDIRECT;
     
     //must use doubly indirect block
-    return (b-OSPFS_NDIRECT) % OSPFS_NINDIRECT;
+    return (b- (uint32_t)OSPFS_NDIRECT) % OSPFS_NINDIRECT;
 	
 }
 
@@ -746,9 +746,7 @@ static int add_block(ospfs_inode_t *oi)
 	uint32_t currentNumberOfBlocks = ospfs_size2nblocks(oi->oi_size);
     if (currentNumberOfBlocks == OSPFS_MAXFILEBLKS || currentNumberOfBlocks < 0)
         return -EIO;
-		
-	//eprintk("NUMBLOCKS: %d\n", currentNumberOfBlocks);
-        
+   
     // keep track of allocations to free in case of -ENOSPC
 	uint32_t *allocated[2] = { 0, 0 };
     
@@ -817,6 +815,7 @@ static int add_block(ospfs_inode_t *oi)
     
     else // >= 266 then must use doubly indirect block
     {
+		//eprintk("NUMBLOCKS: %d\n", currentNumberOfBlocks);
         if (oi->oi_indirect2 == 0) //must allocate a DOUBLY indirect block
         {
             uint32_t num_newDoublyIndirectBlock = allocate_block();
@@ -827,12 +826,12 @@ static int add_block(ospfs_inode_t *oi)
             
             //store block in appropriate place
             oi->oi_indirect2 = num_newDoublyIndirectBlock;
-            
+            //eprintk("DOUBLY_INDIRECT BLKNO: %d\n", num_newDoublyIndirectBlock);
             allocated[0] = num_newDoublyIndirectBlock;
         }
-        uint32_t indirect_index = indir_index(currentNumberOfBlocks);
+        int32_t indirect_index = indir_index(currentNumberOfBlocks);
         uint32_t indirectBlockNo = ((uint32_t*) ospfs_block(oi->oi_indirect2))[indirect_index];
-        
+        //eprintk("INDIRECT BLKNO: %d\n", indirectBlockNo);
         if (indirectBlockNo == 0) //must allocate an indirect block
         {
             uint32_t num_newIndirectBlock = allocate_block();
@@ -852,7 +851,6 @@ static int add_block(ospfs_inode_t *oi)
         }
         
 		int32_t index = direct_index(currentNumberOfBlocks);
-        
         uint32_t num_newDirectBlock = allocate_block();
         if (num_newDirectBlock == 0) //disk is full
         {
@@ -1066,6 +1064,7 @@ change_size(ospfs_inode_t *oi, uint32_t new_size)
 	    int retVal_AddBlock = add_block(oi);
         if (retVal_AddBlock == 0)
             num_blocksAdded++;
+		
         if (retVal_AddBlock == -ENOSPC)
         {
             //shrink file back to original size
@@ -1252,9 +1251,8 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 	if (*f_pos == oi->oi_size)
 		change_size(oi, oi->oi_size + count);
 	else if (*f_pos + count > oi->oi_size)
-		change_size(oi, *f_pos + count);		
-
-	//eprintk("COUNT: %d\n", count);
+		change_size(oi, *f_pos + count);
+	
 	// Copy data block by block
 	while (amount < count && retval >= 0) 
     {
