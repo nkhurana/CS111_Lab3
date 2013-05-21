@@ -1158,7 +1158,7 @@ ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 	// Make sure we don't read past the end of the file!
 	// Change 'count' so we never read past the end of the file.
     if (*f_pos + count > oi->oi_size)
-        count = oi->oi_size;
+        count = oi->oi_size - *f_pos;
     
     
     char *data;
@@ -1454,6 +1454,10 @@ ospfs_link(struct dentry *src_dentry, struct inode *dir, struct dentry *dst_dent
     directoryEntryForHardLink->od_name[dst_dentry->d_name.len]= '\0';
     //set inode number
     directoryEntryForHardLink->od_ino = src_dentry->d_inode->i_ino;
+    
+    //increment inode oi_nlink
+    ospfs_inode_t *ino = ospfs_inode(src_dentry->d_inode->i_ino);
+    ino->oi_nlink++;
     
     return 0;
 }
