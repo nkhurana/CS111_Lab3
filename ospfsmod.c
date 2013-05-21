@@ -1240,20 +1240,18 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 	// Support files opened with the O_APPEND flag.  To detect O_APPEND,
 	// use struct file's f_flags field and the O_APPEND bit.
 	/* EXERCISE: Your code here */
-	uint32_t write_pos = 0;
-	if (filp->f_flags & O_APPEND != 0)
-		write_pos = *f_pos;
+	if (filp->f_flags &= O_APPEND)
+		*f_pos = oi->oi_size;
 	
-	eprintk("WRITE_POS: %d\n", write_pos);
 	// If the user is writing past the end of the file, change the file's
 	// size to accomodate the request.  (Use change_size().)
 	/* EXERCISE: Your code here */
-	if (write_pos != 0)
+	if (*f_pos == oi->oi_size)
 		change_size(oi, oi->oi_size + count);
-	else if (count > oi->oi_size)
-		change_size(oi, count);		
+	else if (*f_pos + count > oi->oi_size)
+		change_size(oi, *f_pos + count);		
 
-	eprintk("COUNT: %d\n", count);
+	//eprintk("COUNT: %d\n", count);
 	// Copy data block by block
 	while (amount < count && retval >= 0) 
     {
@@ -1273,7 +1271,7 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 		// read user space.
 		// Keep track of the number of bytes moved in 'n'.
 		/* EXERCISE: Your code here */
-		uint32_t write_offset = write_pos % OSPFS_BLKSIZE;
+		uint32_t write_offset = *f_pos % OSPFS_BLKSIZE;
 		uint32_t amountFree = OSPFS_BLKSIZE - write_offset;
 		
 		if ((count - amount) < amountFree)
@@ -1290,7 +1288,7 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 		buffer += n;
 		amount += n;
 		*f_pos += n;
-		eprintk("AMOUNT: %d\n", amount);
+		//eprintk("AMOUNT: %d\n", amount);
 	}
 
     done:
