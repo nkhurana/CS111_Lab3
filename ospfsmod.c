@@ -746,8 +746,9 @@ static int add_block(ospfs_inode_t *oi)
 	uint32_t currentNumberOfBlocks = ospfs_size2nblocks(oi->oi_size);
     if (currentNumberOfBlocks == OSPFS_MAXFILEBLKS || currentNumberOfBlocks < 0)
         return -EIO;
-    
-    
+		
+	//eprintk("NUMBLOCKS: %d\n", currentNumberOfBlocks);
+        
     // keep track of allocations to free in case of -ENOSPC
 	uint32_t *allocated[2] = { 0, 0 };
     
@@ -776,9 +777,12 @@ static int add_block(ospfs_inode_t *oi)
     {
         if (oi->oi_indirect == 0) //must allocate an indirect block
         {
+			//eprintk("Allocating indirect block\n");
             uint32_t num_newIndirectBlock = allocate_block();
             if (num_newIndirectBlock == 0) //block wasn't allocate because disk is full
                 return -ENOSPC;
+			
+			//eprintk("GOT THE INDIRECT BLOCK\n");
             //zero out any new blocks that you allocate
             memset(ospfs_block(num_newIndirectBlock), 0, OSPFS_BLKSIZE);
             
@@ -790,6 +794,7 @@ static int add_block(ospfs_inode_t *oi)
         
         //allocate new block and add to indirect block
         uint32_t num_newBlock = allocate_block();
+		//eprintk("GOT THE NEW BLOCK\n");
         if (num_newBlock == 0) //block wasn't allocate because disk is full
         {
             if (allocated[0] != 0)
@@ -799,15 +804,13 @@ static int add_block(ospfs_inode_t *oi)
         
         //zero out any new blocks that you allocate
         memset(ospfs_block(num_newBlock), 0, OSPFS_BLKSIZE);
-        
+        //eprintk("Zeroed Out\n");
         
         //store block in appropriate place
+		int32_t index = direct_index(currentNumberOfBlocks);
+        ((uint32_t*) ospfs_block(oi->oi_indirect))[index] = num_newBlock;
         
-        void* indirectBlock_DataOffset =  (int*)ospfs_block(oi->oi_indirect) + 
-        direct_index(currentNumberOfBlocks);
-        
-        memset(indirectBlock_DataOffset, num_newBlock, sizeof(uint32_t));
-        
+		//eprintk("Good to go!\n");
         //update size
         oi->oi_size += OSPFS_BLKSIZE;
     }
@@ -827,10 +830,8 @@ static int add_block(ospfs_inode_t *oi)
             
             allocated[0] = num_newDoublyIndirectBlock;
         }
-        
-        void* doublyIndirectBlock_DataOffset = (int*)(ospfs_block(oi->oi_indirect2)) + indir_index(currentNumberOfBlocks);
-       
-        uint32_t indirectBlockNo = *(uint32_t*)doublyIndirectBlock_DataOffset;
+        uint32_t indirect_index = indir_index(currentNumberOfBlocks);
+        uint32_t indirectBlockNo = ((uint32_t*) ospfs_block(oi->oi_indirect2))[indirect_index];
         
         if (indirectBlockNo == 0) //must allocate an indirect block
         {
@@ -845,12 +846,12 @@ static int add_block(ospfs_inode_t *oi)
             memset(ospfs_block(num_newIndirectBlock), 0, OSPFS_BLKSIZE);
             
             //store block in appropriate place
-            memset(doublyIndirectBlock_DataOffset, num_newIndirectBlock, sizeof(uint32_t));
+            ((uint32_t*) ospfs_block(oi->oi_indirect2))[indirect_index] = num_newIndirectBlock;
             
             allocated[1] = num_newIndirectBlock;
         }
         
-        void* indirectBlock_DataOffset =(uint32_t*)(ospfs_block(indirectBlockNo)) + direct_index(currentNumberOfBlocks);
+		int32_t index = direct_index(currentNumberOfBlocks);
         
         uint32_t num_newDirectBlock = allocate_block();
         if (num_newDirectBlock == 0) //disk is full
@@ -866,7 +867,7 @@ static int add_block(ospfs_inode_t *oi)
         memset(ospfs_block(num_newDirectBlock), 0, OSPFS_BLKSIZE);
         
         //store block in appropriate place
-        memset(indirectBlock_DataOffset, num_newDirectBlock, sizeof(uint32_t));
+        ((uint32_t*) ospfs_block(indirectBlockNo))[index] = num_newDirectBlock;
         
         //update size
         oi->oi_size += OSPFS_BLKSIZE;
@@ -945,17 +946,17 @@ remove_block(ospfs_inode_t *oi)
         if (oi->oi_indirect == 0)
             return -EIO;
         
-        void* indirectBlock_DataOffset =  (int*)ospfs_block(oi->oi_indirect) + 
-        direct_index(currentNumberOfBlocks-1);
+		int32_t index = direct_index(currentNumberOfBlocks - 1);
+        uint32_t* indirect_db = (uint32_t *) ospfs_block(oi->oi_indirect);
         //set free in bitmap
-        free_block(*(uint32_t*)indirectBlock_DataOffset);
+        free_block(indirect_db[index]);
         //set block pointer to 0
-        *(uint32_t*)indirectBlock_DataOffset = 0;
+        indirect_db[index] = 0;
         //update size
         oi->oi_size -= OSPFS_BLKSIZE;
         
         //We just deleted the 0th entry in indirect block so delete indirect block as well
-        if (direct_index(currentNumberOfBlocks-1) == 0) 
+        if (index == 0) 
         {
             //set free in bitmap
             free_block(oi->oi_indirect);
@@ -971,35 +972,37 @@ remove_block(ospfs_inode_t *oi)
         //error checking; douby indirect block should exist
         if (oi->oi_indirect2 == 0) return -EIO;
         
-        void* doublyIndirectBlock_DataOffset = (uint32_t*)(ospfs_block(oi->oi_indirect2)) + indir_index(currentNumberOfBlocks-1);
-        uint32_t indirectBlockNo = *(uint32_t*)doublyIndirectBlock_DataOffset;
+		int32_t indirect_index = indir_index(currentNumberOfBlocks - 1);
+		uint32_t* indirect2_db = (uint32_t *) (ospfs_block(oi->oi_indirect2));
+        uint32_t indirectBlockNo = indirect2_db[indirect_index];
         
          //error checking; indirect block should exist
         if (indirectBlockNo==0) return -EIO;
         
-        void* indirectBlock_DataOffset = (uint32_t*)(ospfs_block(indirectBlockNo)) + direct_index(currentNumberOfBlocks-1);
-        uint32_t DirectBlockNo = *(uint32_t*)indirectBlock_DataOffset;
+		int32_t index = direct_index(currentNumberOfBlocks - 1);
+		uint32_t* indirect_db = (uint32_t *) (ospfs_block(indirectBlockNo));
+        uint32_t DirectBlockNo = indirect_db[index];
         if (DirectBlockNo == 0) return -EIO;
         
         //set free in bitmap
         free_block(DirectBlockNo);
         //set block ptr to 0
-        *(uint32_t*)indirectBlock_DataOffset = 0;
+        indirect_db[index] = 0;
         //update size
         oi->oi_size -= OSPFS_BLKSIZE;
         
         //free indirect block as well just freed 0th offset in indirect block 
-        if (direct_index(currentNumberOfBlocks-1) == 0)
+        if (index == 0)
         {
             //set free in bitmap
             free_block(indirectBlockNo);
             //set block ptr to 0
-            *(uint32_t*)doublyIndirectBlock_DataOffset = 0;
+            indirect2_db[indirect_index] = 0;
             
         }
         
         //free doubly indirect block as well
-        if ((indir_index(currentNumberOfBlocks-1)==0) && (direct_index(currentNumberOfBlocks-1) == 0))
+        if ((indirect_index==0) && (index == 0))
         {
             free_block(oi->oi_indirect2);
             oi->oi_indirect2=0;
@@ -1240,7 +1243,7 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 	// Support files opened with the O_APPEND flag.  To detect O_APPEND,
 	// use struct file's f_flags field and the O_APPEND bit.
 	/* EXERCISE: Your code here */
-	if (filp->f_flags &= O_APPEND)
+	if ((filp->f_flags & O_APPEND) != 0)
 		*f_pos = oi->oi_size;
 	
 	// If the user is writing past the end of the file, change the file's
