@@ -1242,7 +1242,7 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 	/* EXERCISE: Your code here */
 	uint32_t write_pos = 0;
 	if (filp->f_flags & O_APPEND != 0)
-		write_pos = f_pos;
+		write_pos = *f_pos;
 	
 	// If the user is writing past the end of the file, change the file's
 	// size to accomodate the request.  (Use change_size().)
