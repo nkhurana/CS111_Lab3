@@ -1458,6 +1458,10 @@ ospfs_link(struct dentry *src_dentry, struct inode *dir, struct dentry *dst_dent
     //set inode number
     directoryEntryForHardLink->od_ino = src_dentry->d_inode->i_ino;
     
+    //increment inode oi_nlink
+    ospfs_inode_t *ino = ospfs_inode(src_dentry->d_inode->i_ino);
+    ino->oi_nlink++;
+    
     return 0;
 }
 
