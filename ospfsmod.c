@@ -425,6 +425,7 @@ ospfs_dir_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *ign
 //
 //   EXERCISE: Finish implementing this function.
 
+
 static int ospfs_dir_readdir(struct file *filp, void *dirent, filldir_t filldir)
 {
 	struct inode *dir_inode = filp->f_dentry->d_inode;
@@ -806,6 +807,7 @@ static int add_block(ospfs_inode_t *oi)
         
         //store block in appropriate place
 		int32_t index = direct_index(currentNumberOfBlocks);
+        
         ((uint32_t*) ospfs_block(oi->oi_indirect))[index] = num_newBlock;
         
 		//eprintk("Good to go!\n");
@@ -1366,7 +1368,7 @@ create_blank_direntry(ospfs_inode_t *dir_oi)
     int offset;
     for (offset=0; offset < dir_oi->oi_size; offset+= OSPFS_DIRENTRY_SIZE)
     {
-        ospfs_direntry_t *od = ospfs_inode_data(dir_oi, offset);
+        ospfs_direntry_t *od = (ospfs_direntry_t *) ospfs_inode_data(dir_oi, offset);
         if (od->od_ino == 0)
         {
             //found empty directory but clean all the bytes in case previous name bytes exist
@@ -1528,6 +1530,8 @@ ospfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidat
             return -ENOSPC;
         if (emptyInode->oi_nlink == 0)
         {
+            //clear out inode
+            memset(emptyInode, 0, OSPFS_INODESIZE);
             emptyInode->oi_nlink++;
             emptyInode->oi_mode=mode;
             emptyInode->oi_ftype=OSPFS_FTYPE_REG;
@@ -1589,13 +1593,12 @@ static int
 ospfs_symlink(struct inode *dir, struct dentry *dentry, const char *symname)
 {
 	ospfs_inode_t *dir_oi = ospfs_inode(dir->i_ino);
-
     //check if file named the same as "dentry" already exists
     if (find_direntry(dir_oi, dentry->d_name.name, dentry->d_name.len) != NULL)
         return -EEXIST;
     
     //check if file name length is too long
-    if (dentry->d_name.len > OSPFS_MAXSYMLINKLEN)
+    if (dentry->d_name.len > OSPFS_MAXNAMELEN)
         return -ENAMETOOLONG;
     
     ospfs_direntry_t* directoryEntryForSymLink= create_blank_direntry(dir_oi);
@@ -1607,11 +1610,13 @@ ospfs_symlink(struct inode *dir, struct dentry *dentry, const char *symname)
     ospfs_symlink_inode_t* emptyInode;
     while (1)
     {
-        emptyInode=ospfs_inode(entry_ino);
+        emptyInode=(ospfs_symlink_inode_t *) ospfs_inode(entry_ino);
         if (emptyInode == NULL) //no more inodes since function returns 0 if ran out of inodes
             return -ENOSPC;
         if (emptyInode->oi_nlink == 0)
         {
+            //clear out inode
+            memset(emptyInode, 0, OSPFS_INODESIZE);
             emptyInode->oi_nlink++;
             emptyInode->oi_ftype=OSPFS_FTYPE_SYMLINK;            
             break;
@@ -1619,23 +1624,32 @@ ospfs_symlink(struct inode *dir, struct dentry *dentry, const char *symname)
         entry_ino++;
     }
     
-    
-    //initialize directory entry
+    //set destination file in symlink
     uint32_t destinationFileLength = 0;
     char* destinationCharacter = symname;
+    //count detinationFileLegnth
     while (*destinationCharacter!=NULL)
     {
-        emptyInode->oi_symlink[destinationFileLength] = *destinationCharacter;
+        //emptyInode->oi_symlink[destinationFileLength] = *destinationCharacter;
+        //eprintk("char:%c",*destinationCharacter);
         destinationCharacter++;
         destinationFileLength++;
     }
-    //add NULL BYTE
-    emptyInode->oi_symlink[destinationFileLength] = '/0';
-    //DO NOT COUNT NULL BYTE IN SIZE?????
+    
+    if (destinationFileLength > OSPFS_MAXSYMLINKLEN)
+        return -ENAMETOOLONG;
+    memcpy(emptyInode->oi_symlink, symname, destinationFileLength);
+    
     emptyInode->oi_size=destinationFileLength;
+    
+    //initialize directory entry
+    //copy name into directory entry
+    memcpy(directoryEntryForSymLink->od_name, dentry->d_name.name, dentry->d_name.len);
+    directoryEntryForSymLink->od_name[dentry->d_name.len] = '\0';
     
     //set inode number
     directoryEntryForSymLink->od_ino = entry_ino;
+    
     
 
 
@@ -1682,25 +1696,46 @@ ospfs_follow_link(struct dentry *dentry, struct nameidata *nd)
             PathOne++;
             count_to_colon++;
         }
+        int addNullByte = 0;
+        //add Null byte once at the end of PathONE
+        if (*(PathOne-1) != '\0')
+        {
+            
+            addNullByte = 1;
+            int count_to_end = 0;
+            char *PathTwo = PathOne;
+            while (*PathTwo != '\0')
+            {
+                count_to_end++;
+                PathTwo++;
+            }
+            memmove(PathOne+1, PathOne, count_to_end+1);
+            *PathOne = '\0';
+        }
+            
         
         if (current->uid == 0) //root
         {
 
-            char symLink[OSPFS_MAXSYMLINKLEN+1];
+            /*char symLink[OSPFS_MAXSYMLINKLEN+1];
             strncpy(symLink, condition+1, count_to_colon);
             symLink[count_to_colon] = '\0';
-            nd_set_link(nd, symLink);
+            eprintk("string: %s", symLink);*/
+           // *(condition+1+count_to_colon) = '\0';
+            nd_set_link(nd, condition+1);
             return (void *) 0;
             
         }
         else //not root so return second path
         {
-            nd_set_link(nd, PathOne++);
+            //eprintk("string: %s", PathOne+1);
+            if (addNullByte)
+                nd_set_link(nd, PathOne+2);
+            else nd_set_link(nd, PathOne+1);
             return (void*) 0;
         }
     }
-    
-	//nd_set_link(nd, oi->oi_symlink);
+	nd_set_link(nd, oi->oi_symlink);
 	return (void *) 0;
     
     
