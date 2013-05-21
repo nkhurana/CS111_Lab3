@@ -1673,13 +1673,12 @@ static void *
 ospfs_follow_link(struct dentry *dentry, struct nameidata *nd)
 {
 	ospfs_symlink_inode_t *oi =(ospfs_symlink_inode_t *) ospfs_inode(dentry->d_inode->i_ino);
-	
     // Conditional Symbolic Link logic
-    char* SymLinkWord = "root?";
-    if (memcmp(oi->oi_symlink, SymLinkWord, 5) == 0)
+    char *condition = NULL;
+    if (condition = strchr(oi->oi_symlink, '?'))
     {
         int count_to_colon=0;
-        char* PathOne = oi->oi_symlink+5;
+        char* PathOne = condition+1;
         while (*PathOne!= ':')
         {
             PathOne++;
@@ -1690,7 +1689,7 @@ ospfs_follow_link(struct dentry *dentry, struct nameidata *nd)
         {
 
             char symLink[OSPFS_MAXSYMLINKLEN+1];
-            strncpy(symLink, oi->oi_symlink+5, count_to_colon);
+            strncpy(symLink, condition+1, count_to_colon);
             symLink[count_to_colon] = '\0';
             nd_set_link(nd, symLink);
             return (void *) 0;
@@ -1703,10 +1702,11 @@ ospfs_follow_link(struct dentry *dentry, struct nameidata *nd)
         }
     }
     
-    
-
-	nd_set_link(nd, oi->oi_symlink);
+	//nd_set_link(nd, oi->oi_symlink);
 	return (void *) 0;
+    
+    
+    
 }
 
 
