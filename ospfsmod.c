@@ -1271,8 +1271,8 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 		// read user space.
 		// Keep track of the number of bytes moved in 'n'.
 		/* EXERCISE: Your code here */
-		uint32_t write_offset = *write_pos % OSPFS_BLKSIZE;
-		uint32_t amountFree = OSPFS_BLK_SIZE - write_offset;
+		uint32_t write_offset = write_pos % OSPFS_BLKSIZE;
+		uint32_t amountFree = OSPFS_BLKSIZE - write_offset;
 		
 		if ((count - amount) < amountFree)
 			n = count - amount;
@@ -1444,7 +1444,7 @@ ospfs_link(struct dentry *src_dentry, struct inode *dir, struct dentry *dst_dent
         return -ENAMETOOLONG;
     
     ospfs_direntry_t* directoryEntryForHardLink = create_blank_direntry(dir_oi);
-    if (ISERR(directoryEntryForHardLink))
+    if (IS_ERR(directoryEntryForHardLink))
         return PTR_ERR(directoryEntryForHardLink);
     
     //initialize Hard Link directory entry
@@ -1509,7 +1509,7 @@ ospfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidat
     if (dentry->d_name.len > OSPFS_MAXNAMELEN)
         return -ENAMETOOLONG;
     ospfs_direntry_t* directoryEntryForRegFile = create_blank_direntry(dir_oi);
-    if (ISERR(directoryEntryForRegFile))
+    if (IS_ERR(directoryEntryForRegFile))
         return PTR_ERR(directoryEntryForRegFile);
     
     //find empty inode
@@ -1593,7 +1593,7 @@ ospfs_symlink(struct inode *dir, struct dentry *dentry, const char *symname)
         return -ENAMETOOLONG;
     
     ospfs_direntry_t* directoryEntryForSymLink= create_blank_direntry(dir_oi);
-    if (ISERR(directoryEntryForSymLink))
+    if (IS_ERR(directoryEntryForSymLink))
         return PTR_ERR(directoryEntryForSymLink);
     
     //find empty inode
