@@ -454,12 +454,12 @@ static int ospfs_dir_readdir(struct file *filp, void *dirent, filldir_t filldir)
     {
 		ospfs_direntry_t *od;
 		ospfs_inode_t *entry_oi;
-
+		uint32_t real_pos = f_pos - 2;
 		/* If at the end of the directory, set 'r' to 1 and exit
 		 * the loop.  For now we do this all the time.
 		 *
 		 * EXERCISE: Your code here */
-		if (f_pos * OSPFS_DIRENTRY_SIZE > dir_oi->oi_size)
+		if (real_pos > dir_oi->oi_size)
 		{
 			r = 1;
 			break;
@@ -486,7 +486,7 @@ static int ospfs_dir_readdir(struct file *filp, void *dirent, filldir_t filldir)
 		 */
 
 		/* EXERCISE: Your code here */
-		od = ospfs_inode_data(dir_oi, f_pos * OSPFS_DIRENTRY_SIZE);
+		od = ospfs_inode_data(dir_oi, real_pos);
 		if (od->od_ino > 0)
 		{
 			entry_oi = ospfs_inode(od->od_ino);
@@ -500,12 +500,12 @@ static int ospfs_dir_readdir(struct file *filp, void *dirent, filldir_t filldir)
 			
 			ok_so_far = filldir(dirent, od->od_name, strlen(od->od_name), f_pos, od->od_ino, ftype);
 			if (ok_so_far >= 0)
-				f_pos++;
+				f_pos += OSPFS_DIRENTRY_SIZE;
 			else
 				break;
 		}
 		else
-			f_pos++;
+			f_pos += OSPFS_DIRENTRY_SIZE;
 	}
 
 	// Save the file position and return!
