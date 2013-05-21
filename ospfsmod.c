@@ -1158,7 +1158,7 @@ ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 	// Make sure we don't read past the end of the file!
 	// Change 'count' so we never read past the end of the file.
     if (*f_pos + count > oi->oi_size)
-        count = oi->oi_size;
+        count = oi->oi_size - *f_pos;
     
     
     char *data;
@@ -1242,14 +1242,14 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 	/* EXERCISE: Your code here */
 	uint32_t write_pos = 0;
 	if (filp->f_flags & O_APPEND != 0)
-		write_pos = f_pos;
+		write_pos = *f_pos;
 	
 	// If the user is writing past the end of the file, change the file's
 	// size to accomodate the request.  (Use change_size().)
 	/* EXERCISE: Your code here */
 	if (write_pos != 0)
 		change_size(oi, oi->oi_size + count);
-	else if (count != oi->oi_size)
+	else if (count > oi->oi_size)
 		change_size(oi, count);		
 
 	// Copy data block by block
@@ -1279,7 +1279,7 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 		else
 			n = amountFree;
 			
-		if (copy_from_user(buffer, data + write_offset, n) != 0)
+		if (copy_from_user(data + write_offset, buffer, n) != 0)
 		{
 			retval = -EFAULT;
 			goto done;
