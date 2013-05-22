@@ -1692,7 +1692,7 @@ ospfs_follow_link(struct dentry *dentry, struct nameidata *nd)
     char *condition = NULL;
     if (condition = strchr(oi->oi_symlink, '?'))
     {
-        size_t count_to_colon=0;
+        int count_to_colon=0;
         char* PathOne = condition+1;
         while (*PathOne!= ':')
         {
@@ -1715,20 +1715,17 @@ ospfs_follow_link(struct dentry *dentry, struct nameidata *nd)
             memmove(PathOne+1, PathOne, count_to_end+1);
             *PathOne = '\0';
         }
-            
+        
         
         if (current->uid == 0) //root
         {
-
-            char symLink[OSPFS_MAXSYMLINKLEN+1];
-            strncpy(symLink, condition+1, count_to_colon);
-			eprintk("count to colon: %d\n", count_to_colon);
-			eprintk("condition: %s\n", condition + 1);
-            symLink[count_to_colon] = '\0';
-            eprintk("string: %s\n", symLink);
-			eprintk("size: %d\n", (sizeof(symLink)/sizeof(symLink[0])));
-           // *(condition+1+count_to_colon) = '\0';
-            nd_set_link(nd, symLink);
+            
+            /*char symLink[OSPFS_MAXSYMLINKLEN+1];
+             strncpy(symLink, condition+1, count_to_colon);
+             symLink[count_to_colon] = '\0';
+             eprintk("string: %s", symLink);*/
+            // *(condition+1+count_to_colon) = '\0';
+            nd_set_link(nd, condition+1);
             return (void *) 0;
             
         }
@@ -1747,6 +1744,7 @@ ospfs_follow_link(struct dentry *dentry, struct nameidata *nd)
     
     
 }
+
 
 
 
