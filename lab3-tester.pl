@@ -82,7 +82,7 @@ close FOO;
     ],
 
     # make a larger file for indirect blocks
-    [ 'yes | head -n 1441792 > test/yes.txt && ls -l test/yes.txt | awk \'{ print $5 }\'',
+    [ 'yes | head -n 5632 > test/yes.txt && ls -l test/yes.txt | awk \'{ print $5 }\'',
       '11264'
     ],
    
