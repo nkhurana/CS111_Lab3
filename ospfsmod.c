@@ -460,7 +460,7 @@ static int ospfs_dir_readdir(struct file *filp, void *dirent, filldir_t filldir)
 		 * the loop.  For now we do this all the time.
 		 *
 		 * EXERCISE: Your code here */
-		if (real_pos > dir_oi->oi_size)
+		if (real_pos >= dir_oi->oi_size)
 		{
 			r = 1;
 			break;
@@ -1250,11 +1250,12 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 	// If the user is writing past the end of the file, change the file's
 	// size to accomodate the request.  (Use change_size().)
 	/* EXERCISE: Your code here */
+	eprintk("BEFORE: %d\n", ospfs_size2nblocks(oi->oi_size));
 	if (*f_pos == oi->oi_size)
 		change_size(oi, oi->oi_size + count);
 	else if (*f_pos + count > oi->oi_size)
 		change_size(oi, *f_pos + count);
-	
+	eprintk("AFTER: %d\n", ospfs_size2nblocks(oi->oi_size));
 	// Copy data block by block
 	while (amount < count && retval >= 0) 
     {
@@ -1291,7 +1292,7 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 		buffer += n;
 		amount += n;
 		*f_pos += n;
-		//eprintk("AMOUNT: %d\n", amount);
+		eprintk("AMOUNT: %d\n", amount);
 	}
 
     done:
@@ -1689,7 +1690,7 @@ ospfs_follow_link(struct dentry *dentry, struct nameidata *nd)
     char *condition = NULL;
     if (condition = strchr(oi->oi_symlink, '?'))
     {
-        int count_to_colon=0;
+        size_t count_to_colon=0;
         char* PathOne = condition+1;
         while (*PathOne!= ':')
         {
@@ -1717,12 +1718,15 @@ ospfs_follow_link(struct dentry *dentry, struct nameidata *nd)
         if (current->uid == 0) //root
         {
 
-            /*char symLink[OSPFS_MAXSYMLINKLEN+1];
+            char symLink[OSPFS_MAXSYMLINKLEN+1];
             strncpy(symLink, condition+1, count_to_colon);
+			eprintk("count to colon: %d\n", count_to_colon);
+			eprintk("condition: %s\n", condition + 1);
             symLink[count_to_colon] = '\0';
-            eprintk("string: %s", symLink);*/
+            eprintk("string: %s\n", symLink);
+			eprintk("size: %d\n", (sizeof(symLink)/sizeof(symLink[0])));
            // *(condition+1+count_to_colon) = '\0';
-            nd_set_link(nd, condition+1);
+            nd_set_link(nd, symLink);
             return (void *) 0;
             
         }
