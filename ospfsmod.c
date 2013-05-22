@@ -1679,6 +1679,7 @@ ospfs_symlink(struct inode *dir, struct dentry *dentry, const char *symname)
 //   Exercise: Expand this function to handle conditional symlinks.  Conditional
 //   symlinks will always be created by users in the following form
 //     root?/path/1:/path/2.
+
 //   (hint: Should the given form be changed in any way to make this method
 //   easier?  With which character do most functions expect C strings to end?)
 
